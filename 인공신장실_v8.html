@@ -1,0 +1,261 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+.app{font-family:var(--font-sans);padding:1rem;max-width:700px;margin:0 auto;}
+.topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;}
+.topbar h1{font-size:17px;font-weight:500;color:var(--color-text-primary);}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:.85rem;}
+.chip{font-size:11px;padding:3px 10px;border-radius:99px;border:0.5px solid;}
+.chip.ce{background:#eaf3de;border-color:#639922;color:#3b6d11;}
+.chip.cr{background:#e6f1fb;border-color:#378add;color:#185fa5;}
+.chip.ci{background:#fcebeb;border-color:#e24b4a;color:#a32d2d;}
+.chip.cc{background:#faeeda;border-color:#ba7517;color:#854f0b;}
+.legend{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:.75rem;}
+.li{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--color-text-secondary);}
+.dot{width:9px;height:9px;border-radius:50%;}
+.de{background:#c0dd97;}.dr{background:#85b7eb;}.di{background:#f09595;}.dc{background:#fac775;}
+.room{width:100%;border:1.5px solid var(--color-border-secondary);border-radius:12px;padding:10px;background:var(--color-background-secondary);}
+
+/*
+  핵심: 9번(c9)이 25번(c11), 19번(c12)과 같은 x축 간격이 되려면
+  c3~c9(15~9번)가 c11,c12와 동일한 1fr이어야 하고,
+  c10을 빈 gap으로 두지 않고 없애서 9번과 25번이 인접하게 만들면 됨.
+  
+  하지만 9-15번이 타이트하게 보이는 이유는 7개 자리가 좁은 공간에 몰려있기 때문.
+  → c3~c9를 더 넓은 fr로 설정하고, 왼쪽(c1,c2)을 고정폭으로 유지.
+
+  실제 배치:
+  - 상단열: 16(c1) | 벽(c2) | 15(c3) 14(c4) 13(c5) 12(c6) 11(c7) 10(c8) 9(c9)
+  - 중간열:                                              25(c9) 19(c10)  | gap | 1(c12)
+  
+  즉 9번과 25번이 같은 열(c9)에 있어야 함.
+  19번은 c10, 1-8번은 c12(gap c11 뒤).
+
+  Column 정의:
+  c1  : 48px (16,17,18)
+  c2  : 14px (벽)
+  c3  : 1fr  (15)
+  c4  : 1fr  (14)
+  c5  : 1fr  (13)
+  c6  : 1fr  (12)
+  c7  : 1fr  (11)
+  c8  : 1fr  (10)
+  c9  : 1fr  (9, 25-30)   ← 9번과 25번 같은 열
+  c10 : 1fr  (19-24)
+  c11 : 18px (gap)
+  c12 : 48px (1-8)
+*/
+.grid{
+  display:grid;
+  grid-template-columns:
+    48px 14px
+    1fr 1fr 1fr 1fr 1fr 1fr 1fr
+    1fr
+    18px
+    48px;
+  grid-template-rows:
+    48px 48px 48px 48px 48px
+    20px
+    48px 48px 48px
+    10px 28px;
+  gap:5px;
+  width:100%;
+}
+
+.seat{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  border-radius:7px;border:1.5px solid;cursor:pointer;
+  transition:transform .12s;min-width:0;overflow:hidden;
+}
+.seat:hover{transform:scale(1.08);}
+.seat .n{font-size:13px;font-weight:500;line-height:1.1;}
+.seat .nm{font-size:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;padding:0 2px;}
+.seat .tmr{font-size:8px;font-weight:500;line-height:1.2;}
+.seat.empty{background:#eaf3de;border-color:#639922;}.seat.empty .n{color:#3b6d11;}
+.seat.inuse{background:#fcebeb;border-color:#e24b4a;}.seat.inuse .n{color:#a32d2d;}.seat.inuse .nm{color:#a32d2d;}
+.seat.cleaning{background:#faeeda;border-color:#ba7517;}.seat.cleaning .n{color:#854f0b;}.seat.cleaning .tmr{color:#854f0b;}
+.seat.reserved{background:#e6f1fb;border-color:#378add;}.seat.reserved .n{color:#185fa5;}.seat.reserved .nm{color:#185fa5;}
+
+.wall-v{display:flex;align-items:stretch;justify-content:center;}
+.wall-v-inner{width:2px;background:var(--color-border-primary);border-radius:2px;margin:0 auto;}
+.curpos{
+  display:flex;align-items:center;justify-content:center;flex-direction:row;
+  border-radius:7px;border:1.5px solid var(--color-border-secondary);
+  background:var(--color-background-primary);
+  font-size:9px;color:var(--color-text-secondary);font-weight:500;gap:4px;
+}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;z-index:100;}
+.modal{background:var(--color-background-primary);border-radius:12px;padding:1.5rem;width:270px;border:0.5px solid var(--color-border-tertiary);}
+.modal h2{font-size:15px;font-weight:500;margin-bottom:1rem;color:var(--color-text-primary);}
+.modal input{width:100%;margin-bottom:.75rem;padding:8px 10px;border-radius:8px;border:0.5px solid var(--color-border-secondary);font-size:14px;background:var(--color-background-secondary);color:var(--color-text-primary);}
+.sbtns{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:1rem;}
+.sbtn{padding:8px;border-radius:8px;border:1.5px solid;font-size:12px;cursor:pointer;font-weight:500;}
+.sbtn.se{background:#eaf3de;border-color:#639922;color:#3b6d11;}
+.sbtn.sr{background:#e6f1fb;border-color:#378add;color:#185fa5;}
+.sbtn.si{background:#fcebeb;border-color:#e24b4a;color:#a32d2d;}
+.sbtn.sc{background:#faeeda;border-color:#ba7517;color:#854f0b;}
+.sbtn.sel{outline:3px solid #7f77dd;outline-offset:1px;}
+.mact{display:flex;gap:8px;}
+.bconf{flex:1;padding:9px;background:#534ab7;color:#eeedfe;border:none;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;}
+.bcanc{padding:9px 12px;background:var(--color-background-secondary);color:var(--color-text-secondary);border:0.5px solid var(--color-border-tertiary);border-radius:8px;font-size:13px;cursor:pointer;}
+.alert{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#534ab7;color:#eeedfe;padding:10px 20px;border-radius:99px;font-size:13px;font-weight:500;z-index:200;opacity:0;transition:opacity .3s;white-space:nowrap;}
+.alert.show{opacity:1;}
+</style>
+
+<div class="app">
+  <h2 class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)">인공신장실 자리 현황</h2>
+  <div class="topbar">
+    <h1>인공신장실</h1>
+    <span style="font-size:11px;color:var(--color-text-secondary)" id="clock"></span>
+  </div>
+  <div class="chips" id="chips"></div>
+  <div class="legend">
+    <div class="li"><span class="dot de"></span>비어있음</div>
+    <div class="li"><span class="dot dr"></span>예약</div>
+    <div class="li"><span class="dot di"></span>사용중</div>
+    <div class="li"><span class="dot dc"></span>청소중 (10분 타이머)</div>
+  </div>
+  <div class="room">
+    <div class="grid" id="grid"></div>
+  </div>
+</div>
+
+<div class="alert" id="alert"></div>
+
+<div class="modal-bg" id="modal" style="display:none;">
+  <div class="modal">
+    <h2 id="mtitle">자리 설정</h2>
+    <input type="text" id="pname" placeholder="환자 이름 (선택)" maxlength="8"/>
+    <div class="sbtns">
+      <button class="sbtn se" data-s="empty" onclick="pickS('empty')">비어있음</button>
+      <button class="sbtn sr" data-s="reserved" onclick="pickS('reserved')">예약</button>
+      <button class="sbtn si" data-s="inuse" onclick="pickS('inuse')">사용중</button>
+      <button class="sbtn sc" data-s="cleaning" onclick="pickS('cleaning')">청소중</button>
+    </div>
+    <div class="mact">
+      <button class="bcanc" onclick="closeM()">취소</button>
+      <button class="bconf" onclick="confirmM()">확인</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const S={};
+for(let i=1;i<=30;i++) S[i]={status:'empty',name:'',timerEnd:null};
+const timers={};
+let sel=null,selSt='empty';
+
+/*
+  c1=1, c2=2(wall), c3=3(15), c4=4(14), c5=5(13), c6=6(12), c7=7(11), c8=8(10), c9=9(9+25-30), c10=10(19-24), c11=11(gap), c12=12(1-8)
+*/
+const positions=[
+  // 왼쪽 방
+  [16,1,1],[17,1,3],[18,1,5],
+  // 상단열 (c3~c9): 15,14,13,12,11,10,9
+  [15,3,1],[14,4,1],[13,5,1],[12,6,1],[11,7,1],[10,8,1],[9,9,1],
+  // c9: 25,26,27 / 28,29,30  ← 9번과 같은 열
+  [25,9,3],[26,9,4],[27,9,5],
+  [28,9,7],[29,9,8],[30,9,9],
+  // c10: 19,20,21 / 22,23,24
+  [19,10,3],[20,10,4],[21,10,5],
+  [22,10,7],[23,10,8],[24,10,9],
+  // c12: 1~8
+  [1,12,1],[2,12,2],[3,12,3],[4,12,4],[5,12,5],
+  [6,12,7],[7,12,8],[8,12,9],
+];
+
+function renderSeat(num){
+  const d=document.getElementById('s'+num);
+  if(!d)return;
+  const st=S[num];
+  d.className='seat '+st.status;
+  let h=`<span class="n">${num}</span>`;
+  if((st.status==='inuse'||st.status==='reserved')&&st.name) h+=`<span class="nm">${st.name}</span>`;
+  if(st.status==='cleaning'&&st.timerEnd){
+    const rem=Math.max(0,Math.ceil((st.timerEnd-Date.now())/1000));
+    const m=Math.floor(rem/60),s=rem%60;
+    h+=`<span class="tmr">${m}:${String(s).padStart(2,'0')}</span>`;
+  }
+  d.innerHTML=h;
+}
+
+function startTimer(num){
+  if(timers[num])clearInterval(timers[num]);
+  S[num].timerEnd=Date.now()+10*60*1000;
+  timers[num]=setInterval(()=>{
+    const rem=Math.max(0,Math.ceil((S[num].timerEnd-Date.now())/1000));
+    renderSeat(num);
+    if(rem<=0){
+      clearInterval(timers[num]);delete timers[num];
+      S[num].status='empty';S[num].timerEnd=null;
+      renderSeat(num);updateChips();
+      showAlert(num+'번 자리 청소 완료! 사용 가능합니다.');
+    }
+  },1000);
+}
+
+function showAlert(msg){
+  const a=document.getElementById('alert');
+  a.textContent=msg;a.classList.add('show');
+  setTimeout(()=>a.classList.remove('show'),4000);
+}
+
+function mk(col,row,cls,html,onclick){
+  const d=document.createElement('div');
+  d.className=cls;
+  d.style.gridColumn=col;
+  d.style.gridRow=row;
+  if(html)d.innerHTML=html;
+  if(onclick)d.onclick=onclick;
+  document.getElementById('grid').appendChild(d);
+  return d;
+}
+
+function buildGrid(){
+  const lw=mk('2','1/5','wall-v',null,null);
+  lw.innerHTML='<div class="wall-v-inner"></div>';
+  mk('1/4','11','curpos','<i class="ti ti-map-pin" aria-hidden="true" style="font-size:12px"></i><span>현재위치</span>',null);
+  positions.forEach(([n,c,r])=>{
+    const d=mk(''+c,''+r,'seat empty',null,()=>openM(n));
+    d.id='s'+n;
+    renderSeat(n);
+  });
+}
+
+function openM(num){
+  sel=num;selSt=S[num].status;
+  document.getElementById('mtitle').textContent=num+'번 자리';
+  document.getElementById('pname').value=S[num].name||'';
+  document.querySelectorAll('.sbtn').forEach(b=>b.classList.toggle('sel',b.dataset.s===selSt));
+  document.getElementById('modal').style.display='flex';
+  setTimeout(()=>document.getElementById('pname').focus(),50);
+}
+function closeM(){document.getElementById('modal').style.display='none';sel=null;}
+function pickS(s){selSt=s;document.querySelectorAll('.sbtn').forEach(b=>b.classList.toggle('sel',b.dataset.s===s));}
+function confirmM(){
+  if(!sel)return;
+  const nm=document.getElementById('pname').value.trim();
+  S[sel].status=selSt;
+  S[sel].name=(selSt==='inuse'||selSt==='reserved')?nm:'';
+  if(selSt==='cleaning'){startTimer(sel);}
+  else{if(timers[sel]){clearInterval(timers[sel]);delete timers[sel];}S[sel].timerEnd=null;}
+  renderSeat(sel);updateChips();closeM();
+}
+
+function updateChips(){
+  const c={empty:0,inuse:0,cleaning:0,reserved:0};
+  Object.values(S).forEach(s=>c[s.status]++);
+  document.getElementById('chips').innerHTML=
+    `<span class="chip ce">비어있음 ${c.empty}</span><span class="chip cr">예약 ${c.reserved}</span><span class="chip ci">사용중 ${c.inuse}</span><span class="chip cc">청소중 ${c.cleaning}</span>`;
+}
+
+function tick(){
+  const n=new Date();
+  document.getElementById('clock').textContent=n.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
+}
+
+document.getElementById('modal').addEventListener('click',function(e){if(e.target===this)closeM();});
+document.getElementById('pname').addEventListener('keydown',e=>{if(e.key==='Enter')confirmM();});
+
+buildGrid();updateChips();tick();setInterval(tick,30000);
+</script>
